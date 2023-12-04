@@ -1,5 +1,5 @@
-
-NetAddr.langPort;
+(
+//NetAddr.langPort;
 /*
 buttons
 tunings / scales
@@ -16,22 +16,29 @@ more synthesis
 /* var for selecting */
 ~synthesis_type = 0;
 
+~field_files = "/home/numina/repos/electromagnetic_sensibility/Field_recordings/*.wav".pathMatch;
+~field_samples = ~field_files.collect{|i| Buffer.read(s, i); };
+
+
 /* FM synthesis */
-SynthDef(\extreme_fm0, {|out recOut bus0 bus1 bus2 bus3 att=0.01 dur=0.5 amp=0.2 envbuf|
+SynthDef(\extreme_fm0, {|out recOut bus0 bus1 bus2 bus3 bufnum posBus att=0.01 dur=0.5 durModBus amp=0.2 envbuf|
 	var freq = In.kr(bus0, 1);
 	var index = In.kr(bus1, 1);
 	var phaseFreqMod = In.kr(bus2, 1);
 	var phaseIndex = In.kr(bus3, 1);
+	var pos = In.kr(posBus, 1);
+	var durMod = In.kr(durModBus, 1);
 	var mod = SinOsc.ar(freq.midicps, 0, index);
-	var sig = SinOsc.ar(freq.midicps * mod, SinOsc.kr(phaseFreqMod, 0, phaseIndex) );
+	//var sig = SinOsc.ar(freq.midicps * mod, SinOsc.kr(phaseFreqMod, 0, phaseIndex) );
+	var sig = PlayBuf.ar(1, bufnum, BufRateScale.ir(bufnum), 1, BufFrames.kr(bufnum) * pos, loop: 1);
 	//var env = EnvGen.ar(Env.adsr(att, 0.0, 1, rel), gate, doneAction: 2);
-	var env = Osc1.ar(envbuf, dur);
+	var env = Osc1.ar(envbuf, dur*durMod);
 
 	sig = sig * env * amp;
 	Out.ar(recOut, sig);
 	Out.ar(out, sig); }).store;
 
-SynthDef(\extreme_fm1, {|out recOut bus0 bus1 bus2 bus3 att=0.01 dur=0.5 amp=1 envbuf gate=1|
+SynthDef(\extreme_fm1, {|out recOut bus0 bus1 bus2 bus3 bufnum att=0.01 dur=0.5 amp=1 envbuf gate=1|
 	var freq = In.kr(bus0, 1);
 	var index = In.kr(bus1, 1);
 	var phaseFreqMod = In.kr(bus2, 1);
@@ -39,7 +46,8 @@ SynthDef(\extreme_fm1, {|out recOut bus0 bus1 bus2 bus3 att=0.01 dur=0.5 amp=1 e
 
 	var mod = SinOsc.ar(freq.midicps, 0, index);
 
-	var sig = SinOsc.ar((freq ** Array.series(200, 0, 0.002)) * 300, SinOsc.kr(phaseFreqMod, 0, phaseIndex)).sum;
+	//var sig = SinOsc.ar((freq ** Array.series(200, 0, 0.002)) * 300, SinOsc.kr(phaseFreqMod, 0, phaseIndex)).sum;
+	var sig = BufRd.ar(1, bufnum, SinOsc.ar(BufDur.ir(bufnum).reciprocal, SinOsc.kr(phaseFreqMod, 0, phaseIndex) ).range(0, BufFrames.ir(bufnum)));
 	//var sig = SinOsc.ar(freq.midicps * mod, SinOsc.kr(phaseFreqMod, 0, phaseIndex) );
 	//var env = EnvGen.ar(Env.adsr(att, 0.0, 1, rel), gate, doneAction: 2);
 	var env = Osc1.ar(envbuf, dur);
@@ -50,20 +58,20 @@ SynthDef(\extreme_fm1, {|out recOut bus0 bus1 bus2 bus3 att=0.01 dur=0.5 amp=1 e
 	Out.ar(recOut, sig);
 	Out.ar(out, sig); }).store;
 
-SynthDef(\extreme_fm2, {|out recOut freqBus indexBus att=0.01 dur=0.5 amp=0.25 envbuf phaseFreqModBus phaseIndexBus gate=1|
+SynthDef(\extreme_fm2, {|out recOut freqBus indexBus att=0.01 bufnum dur=0.5 amp=0.25 envbuf phaseFreqModBus phaseIndexBus gate=1|
 	var freq = In.kr(freqBus, 1);
 	var index = In.kr(indexBus, 1);
 	var phaseFreqMod = In.kr(phaseFreqModBus, 1);
 	var phaseIndex = In.kr(phaseIndexBus, 1);
 	var mod = SinOsc.ar(freq.midicps, 0, index);
-	var sig = SinOsc.ar(freq.midicps * mod, SinOsc.kr(phaseFreqMod, 0, phaseIndex) );
+	//var sig = SinOsc.ar(freq.midicps * mod, SinOsc.kr(phaseFreqMod, 0, phaseIndex) );
+	var sig = BufRd.ar(1, bufnum, SinOsc.ar(freq, SinOsc.kr(phaseFreqMod, 0, phaseIndex) ).range(0, BufFrames.ir(bufnum)));
 	//var env = EnvGen.ar(Env.adsr(att, 0.0, 1, rel), gate, doneAction: 2);
 	var env = Osc1.ar(envbuf, dur);
 
 	sig = sig * env * amp;
 	Out.ar(recOut, sig);
 	Out.ar(out, sig); }).store;
-
 
 SynthDef(\transform0, {|out=0 in ffreq=500 modFreq|
 	var sig = In.ar(in, 1);
@@ -107,12 +115,13 @@ SynthDef(\transform2, {|out=0 in ffreq=500 modFreq|
 	var drysig = sig;
 	sig = MoogFF.ar(sig , 500, 3);
 	sig = BLowPass.ar(sig, 800, 0.7);
+	sig = Decimator.ar(sig, LFNoise0.kr(0.1).range(500,4000), 5);
 
 	4.do{ d = 0.1.rand + 0.05;
-		sig = CombC.ar(sig, d, SinOsc.kr(LFNoise1.kr(Rand(0.1,0.8)).range(0.001,1.0)).range(0.001,d), Rand(5.0, 11.0),0.3, sig * 0.33); };
-	sig = ( drysig * 0.8 ) + ( sig * 0.2 );
+		sig = CombC.ar(sig, d, d, Rand(5.0, 11.0),0.75, sig * 0.33); };
+	sig = ( drysig * 0.8 ) + ( sig * 0.5 );
 	sig = HPF.ar(sig, 40);
-	sig = Pan2.ar(sig, LFNoise0.kr(0.1).range(-0.1,0.1));
+	sig = Pan2.ar(sig, SinOsc.kr(LFNoise0.kr(0.1).range(0.1,30.0)).range(-0.1,0.1));
 	sig = FreeVerb2.ar(sig[0], sig[1], 0.2, 0.8);
 
 	Out.ar(out, sig ); }).store;
@@ -164,6 +173,8 @@ v.put(v.size-1, 0);
 ~envBuf = Buffer.sendCollection(s, v, 1);
 
 
+~clock = TempoClock(1);
+
 /*tunings*/
 ~pythScale = Scale.chromatic(\pythagorean);
 
@@ -191,6 +202,8 @@ v.put(v.size-1, 0);
 ~pythTuneSpec = [0, 71, \linear, 1, 10].asSpec;
 ~pythRateSpec = [0, 12, \linear, 1, 5].asSpec;
 
+~clock_spec = [60.0, 0.25, \linear, 0.01].asSpec;
+~dur_mod_spec = [0.2, 3.0, \linear, 0.0001].asSpec;
 
 ~extremeGroup = Group.new;
 ~recordGroup = Group.after(~extremeGroup);
@@ -202,6 +215,10 @@ v.put(v.size-1, 0);
 ~trans_bs = Array.fill(3, { Bus.audio(s, 1); });
 ~smplr_eff_bs = Array.fill(3, { Bus.audio(s, 1); });
 ~sampler_effect = Synth(\sampler_effect, [\in, ~smplr_eff_bs[0] ], ~playGroup, \addAfter);
+
+~pos_bus = Bus.control(s, 1).set(0);
+~rate_bus = Bus.control(s, 1).set(1);
+~dur_mod_bus = Bus.control(s, 1).set(1);
 
 
 /*
@@ -245,8 +262,7 @@ Synth(\transform2, [\in, ~trans_bs[2] ], ~transformGroup);
 
 ~fm_cnt = nil;
 
-
-
+~sampleChoose = 0;
 
 
 OSCdef(\btn_0, {|msg, time, addr, recvPort| msg.postln;
@@ -271,29 +287,19 @@ OSCdef(\btn_0, {|msg, time, addr, recvPort| msg.postln;
 						{ ~transform_mode == 1 } {  ~transform_bus = ~trans_bs[1];  }
 						{ ~transform_mode == 2 } { ~transform_bus = ~trans_bs[2];  };
 
-
-
-
-
-
 						Synth(\extreme_fm++~synthesis_type, [\envbuf, ~envBuf, \dur, dur*overlap,
+							\durModBus, ~dur_mod_bus.index,
+							\posBus, ~pos_bus.index,
 							\out, ~transform_bus, \recOut, ~recBus,
+							\bufnum,  ~field_samples[~sampleChoose],
 							\bus0, ~extremeBuses[~synthesis_type][0].index, \bus1,~extremeBuses[~synthesis_type][1].index,
 							\bus2, ~extremeBuses[~synthesis_type][2].index,\bus3, ~extremeBuses[~synthesis_type][3].index ], ~extremeGroup );
 
+						dur.wait; }; }).play(~clock);
 
-
-
-							dur.wait; }; }).play;
-
-
-
-				~fm_cnt = 0;
-
+					~fm_cnt = 0;
 
 					~extremeSwitch = 1; }); });
-
-
 		}, {
 			if (msg[1] == 0, { "synth off".postln;
 				~grainRoutine.stop;
@@ -311,12 +317,13 @@ OSCdef(\btn_0, {|msg, time, addr, recvPort| msg.postln;
 ~recTime = nil;
 ~recTimeBus = Bus.control(s, 1).set(0);
 
-~bangGates.put(1,0);
+//~bangGates.put(1,0);
 
 
 
 OSCdef(\btn_1, {|msg, time, addr, recvPort|
 	//msg.postln;
+	"btn 1".postln;
 
 
 	if ( ~bangGates[1] == 0, {
@@ -328,7 +335,8 @@ OSCdef(\btn_1, {|msg, time, addr, recvPort|
 
 			"turn on player".postln;
 
-				~playSynth = Synth(\extreme_player, [\in, ~recBus,\rateBus, ~rateBus.index, \recTime, ~recTime,\bufnum, ~recBufs[0], \out, ~smplr_eff_bs[0] ], ~playGroup);
+				~playSynth = Synth(\extreme_player,
+					[\in, ~recBus,\rateBus, ~rateBus.index, \recTime, ~recTime,\bufnum, ~recBufs[0], \out, ~smplr_eff_bs[0] ], ~playGroup);
 
 
 			~playSwitch = 1;
@@ -352,7 +360,7 @@ OSCdef(\btn_1, {|msg, time, addr, recvPort|
 
 
 OSCdef(\btn_2, {|msg, time, addr, recvPort|
-	//msg.postln;
+	"btn 2".postln;
 
 		if ( ~bangGates[2] == 0, {
 
@@ -439,6 +447,19 @@ OSCdef(\btn_5, {|msg, time, addr, recvPort| msg.postln;
 OSCdef(\btn_6, {|msg, time, addr, recvPort| msg.postln;
 
 
+	if ( ~bangGates[6] == 0, { ~bangGates.put(6, 1);
+
+		if ( ~sampleChoose != (~field_samples.size-1), {
+			~sampleChoose = ~sampleChoose + 1; }, { ~sampleChoose = 0; });
+
+		("samplechoose : "++~sampleChoose).postln;
+
+
+		Task({ 1.do{  0.2.wait; ~bangGates.put(6, 0); }; }).start;
+	});
+
+
+
 }, '/btn_6', nil);
 
 OSCdef(\btn_7, {|msg, time, addr, recvPort| msg.postln;
@@ -474,8 +495,10 @@ OSCdef(\abs_x, {|msg, time, addr, recvPort|
 
 	if ( ~freezeSwitch == nil, {
 	~extremeBuses[~synthesis_type][0].set(
-			pythTone.postln;
+			pythTone;
 		);
+
+		~pos_bus.set((msg[1]/1021).postln;).set;
 
 
 
@@ -487,14 +510,14 @@ OSCdef(\abs_x, {|msg, time, addr, recvPort|
 
 }, '/abs_x', nil);
 
-
-
-
-
 OSCdef(\abs_y, {|msg, time, addr, recvPort|
 	//msg.postln;
 
 	if ( ~freezeSwitch == nil, {
+
+		~dur_mod_bus.set(~dur_mod_spec.map(msg[1]/1021));
+		~clock.tempo = ~clock_spec.map(msg[1]/1021);
+
 	~extremeBuses[0][1].set(~indexSpec.map(msg[1]/1021); );
 	~extremeBuses[1][1].set(~indexSpec.map(msg[1]/1021); );
 
@@ -502,7 +525,7 @@ OSCdef(\abs_y, {|msg, time, addr, recvPort|
 	}  , '/abs_y', nil);
 
 OSCdef(\abs_rz, {|msg, time, addr, recvPort|
-	msg.postln;
+	//msg.postln;
 
 	if ( ~freezeSwitch == nil, {
 	~extremeBuses[0][2].set(~phaseFreqModSpec.map(msg[1]/255); );
@@ -529,7 +552,7 @@ OSCdef(\abs_throttle, {|msg, time, addr, recvPort|
 
 
 OSCdef(\abs_hat0x, {|msg, time, addr, recvPort|
-	msg.postln;
+	//msg.postln;
 
 	if ( msg[1] == -1, {
 		~rateBus.set( ~lowRateArray[~lowRateIndex]);
@@ -542,17 +565,13 @@ OSCdef(\abs_hat0x, {|msg, time, addr, recvPort|
 	}, '/\abs_hat0x', nil);
 
 OSCdef(\abs_hat0y, {|msg, time, addr, recvPort|
-	msg.postln;
-
-
-
-
+	//msg.postln;
 
 }, '/\abs_hat0y', nil);
 
 
 
-
+);
 
 
 

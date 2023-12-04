@@ -1,4 +1,14 @@
 /*
+1. atmosferisch granulair - hydrofonische geluiden met morse code
+2. minimalistische ritmes met monome
+3. elektromagnetische laag / kick met stoom
+4.
+5. joystick controller data mayhem
+
+
+
+
+
 different scenes
 joystick gebruiken voor field recordings
 kanalen 0, 1 monome, radio
